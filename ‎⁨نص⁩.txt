@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مولد الصور الذكي - باسمك</title>
+    <!-- تضمين مكتبة Tailwind CSS للتصميم -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* تأثير التحميل الدائري */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between p-4 sm:p-8">
+
+    <!-- رأس الصفحة -->
+    <header class="w-full max-w-3xl text-center mt-8 mb-8">
+        <h1 class="text-4xl md:text-5xl font-bold text-gray-800 mb-4">
+            🎨 مولد الصور <span class="text-blue-600">الذكي</span>
+        </h1>
+        <p class="text-gray-600 text-lg">
+            أدخل وصف الصورة (البرومبت) وسيقوم الذكاء الاصطناعي (Nano Banana) برسمها لك في ثوانٍ!
+        </p>
+    </header>
+
+    <!-- منطقة العمل الرئيسية -->
+    <main class="w-full max-w-3xl bg-white rounded-2xl shadow-xl p-6 sm:p-8">
+        
+        <!-- حقل إدخال البرومبت -->
+        <div class="mb-6">
+            <label for="promptInput" class="block text-gray-700 font-semibold mb-2">ماذا تريد أن ترسم؟</label>
+            <textarea id="promptInput" rows="3" 
+                class="w-full p-4 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none"
+                placeholder="مثال: قطة رائد فضاء تلعب بالنجوم في مجرة ملونة، جودة عالية، إضاءة سينمائية..."></textarea>
+        </div>
+
+        <!-- زر التوليد -->
+        <button id="generateBtn" onclick="generateImage()" 
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all transform hover:scale-[1.02] shadow-md flex justify-center items-center gap-2">
+            <span>توليد الصورة الآن ✨</span>
+        </button>
+
+        <!-- منطقة عرض النتيجة -->
+        <div id="resultArea" class="mt-8 hidden flex-col items-center">
+            
+            <!-- مؤشر التحميل -->
+            <div id="loadingIndicator" class="hidden flex-col items-center my-8">
+                <div class="loader mb-4"></div>
+                <p class="text-gray-600 animate-pulse">جاري رسم إبداعك... يرجى الانتظار...</p>
+            </div>
+
+            <!-- الصورة الناتجة -->
+            <div id="imageContainer" class="hidden w-full flex flex-col items-center">
+                <img id="generatedImage" src="" alt="الصورة المولدة" class="w-full max-w-lg rounded-xl shadow-lg border border-gray-200 object-cover">
+                
+                <button onclick="downloadImage()" class="mt-6 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-lg transition-all shadow">
+                    تحميل الصورة ⬇️
+                </button>
+            </div>
+
+            <!-- رسالة الخطأ -->
+            <div id="errorMessage" class="hidden w-full bg-red-100 text-red-700 p-4 rounded-lg text-center font-semibold">
+                حدث خطأ أثناء توليد الصورة. يرجى المحاولة مرة أخرى.
+            </div>
+
+        </div>
+    </main>
+
+    <!-- تذييل الصفحة -->
+    <footer class="w-full text-center mt-12 text-gray-500">
+        <p>تم الإنشاء بكل ❤️ بواسطة <strong>[اسمك هنا]</strong></p>
+        <p class="text-sm mt-1">مدعوم بتقنية Nano Banana (Gemini Flash Image)</p>
+    </footer>
+
+    <!-- سكربت التشغيل (JavaScript) -->
+    <script>
+        // --- إعدادات الـ API ---
+        // سيتم حقن المفتاح تلقائياً في بيئة العرض الحالية.
+        // عند رفع الموقع خارجاً، قم بوضع مفتاحك الخاص بين علامتي التنصيص.
+        const apiKey = ""; 
+
+        // عناصر واجهة المستخدم
+        const promptInput = document.getElementById('promptInput');
+        const generateBtn = document.getElementById('generateBtn');
+        const resultArea = document.getElementById('resultArea');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const imageContainer = document.getElementById('imageContainer');
+        const generatedImage = document.getElementById('generatedImage');
+        const errorMessage = document.getElementById('errorMessage');
+
+        let currentImageBase64 = "";
+
+        async function generateImage() {
+            const prompt = promptInput.value.trim();
+            
+            if (!prompt) {
+                alert("يرجى إدخال وصف للصورة أولاً!");
+                return;
+            }
+
+            // إعداد واجهة المستخدم لحالة التحميل
+            resultArea.classList.remove('hidden');
+            loadingIndicator.classList.remove('hidden');
+            loadingIndicator.classList.add('flex');
+            imageContainer.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+            generateBtn.disabled = true;
+            generateBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            try {
+                // استدعاء نموذج Nano Banana (gemini-2.5-flash-image-preview)
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`;
+                
+                const payload = {
+                    contents: [
+                        {
+                            parts: [{ text: prompt }]
+                        }
+                    ],
+                    generationConfig: {
+                        responseModalities: ["IMAGE"]
+                    }
+                };
+
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // استخراج الصورة بصيغة Base64 من الرد
+                const parts = data.candidates?.[0]?.content?.parts;
+                const imagePart = parts?.find(p => p.inlineData);
+                
+                if (imagePart && imagePart.inlineData && imagePart.inlineData.data) {
+                    currentImageBase64 = imagePart.inlineData.data;
+                    const mimeType = imagePart.inlineData.mimeType || 'image/png';
+                    
+                    // عرض الصورة
+                    generatedImage.src = `data:${mimeType};base64,${currentImageBase64}`;
+                    
+                    loadingIndicator.classList.add('hidden');
+                    loadingIndicator.classList.remove('flex');
+                    imageContainer.classList.remove('hidden');
+                } else {
+                    throw new Error("لم يتم العثور على صورة في الرد.");
+                }
+
+            } catch (error) {
+                console.error("Error generating image:", error);
+                loadingIndicator.classList.add('hidden');
+                loadingIndicator.classList.remove('flex');
+                errorMessage.classList.remove('hidden');
+            } finally {
+                // إعادة تفعيل الزر
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        // دالة لتحميل الصورة لجهاز المستخدم
+        function downloadImage() {
+            if (!currentImageBase64) return;
+            
+            const link = document.createElement('a');
+            link.href = generatedImage.src;
+            link.download = `generated-image-${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
+
